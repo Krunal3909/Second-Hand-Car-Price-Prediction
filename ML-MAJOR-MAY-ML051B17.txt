@@ -1,0 +1,174 @@
+# In[41]:
+
+
+import warnings
+warnings.filterwarnings('ignore')
+
+import random
+import datetime
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+import keras
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import confusion_matrix, f1_score
+from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import GridSearchCV, cross_validate
+le = LabelEncoder()
+
+import sklearn
+import xgboost as xgb
+import lightgbm as lgbm
+import scipy
+random.seed(20)
+
+
+# In[42]:
+
+
+# reading dataset
+train_data = pd.read_excel('Data_Train.xlsx')
+test_data = pd.read_excel('Data_Test.xlsx')
+print(train_data.shape)
+print(test_data.shape)
+
+
+# In[43]:
+
+
+X_train = train_data.drop(columns='Price')
+y_train = train_data['Price']
+
+X_test = test_data
+
+
+# In[44]:
+
+
+X_train['Engine'] = X_train['Engine'].str[:-3].replace(np.nan, -1).astype('int').replace(-1, np.nan)
+X_test['Engine'] = X_test['Engine'].str[:-3].replace(np.nan, -1).astype('int').replace(-1, np.nan)
+
+
+# In[45]:
+
+
+X_train['Power'] = X_train['Power'].str[:-4].replace(np.nan, -1).replace('null', -1).astype('float').replace(-1, np.nan)
+X_test['Power'] = X_test['Power'].str[:-4].replace(np.nan, -1).replace('null', -1).astype('float').replace(-1, np.nan)
+
+
+# In[46]:
+
+
+# Dropping columns
+X_train = X_train.drop(columns=['New_Price', 'Mileage'])
+X_test = X_test.drop(columns=['New_Price', 'Mileage'])
+
+
+# In[47]:
+
+
+def fill_engine(x):
+    return x.sum()/len(x)
+
+X_train['Engine'] = X_train.groupby(['Name'])['Engine'].transform(lambda x: x.fillna(fill_engine(x)))
+
+values = X_test[X_test['Engine'].isnull()]['Name'].values
+X_test['Engine'].ix[X_test['Engine'].isnull()] = list(X_train.groupby('Name')['Engine'].mean()[values].values)
+
+X_test['Engine'] = X_test['Engine'].fillna(X_train['Engine'].mean())
+
+
+# In[48]:
+
+
+def fill_power(x):
+    return x.sum()/len(x)
+
+X_train['Power'] = X_train.groupby(['Name'])['Power'].transform(lambda x: x.fillna(fill_power(x)))
+
+values = X_test[X_test['Power'].isnull()]['Name'].values
+X_test['Power'].ix[X_test['Power'].isnull()] = list(X_train.groupby('Name')['Power'].mean()[values].values)
+
+X_test['Power'] = X_test['Power'].fillna(X_train['Power'].mean())
+
+
+# In[49]:
+
+
+def fill_seats(x, X_train):
+    try:
+        return x.mode()[0]
+    except:
+        return X_train['Seats'].mode()[0]
+    
+X_train['Seats'] = X_train.groupby(['Name'])['Seats'].transform(lambda x: x.fillna(fill_seats(x, X_train)))
+X_test['Seats'] = X_test['Seats'].fillna(X_train['Seats'].mode()[0])
+
+
+# In[50]:
+
+
+# Label Encoding
+object_columns = ['Name', 'Location', 'Fuel_Type', 'Transmission', 'Owner_Type']
+
+for col in object_columns:
+    label_encoder = le.fit(list(X_train[col]) + list(X_test[col]))
+    X_train[col] = label_encoder.transform(X_train[col])
+    X_test[col] = label_encoder.transform(X_test[col])
+
+
+# In[51]:
+
+
+# XGBoost
+XGB_model = xgb.XGBRegressor()
+
+
+# In[52]:
+
+
+XGB_model.fit(X_train, y_train)
+
+
+# In[53]:
+
+
+# Predict and Save
+y_pred = XGB_model.predict(X_test)
+
+
+# In[54]:
+
+
+y_pred
+
+
+# In[55]:
+
+
+y_pred_df = pd.DataFrame({'Price': y_pred})
+
+
+# In[56]:
+
+
+y_pred_df.to_excel('Predictions.xlsx', index=False)
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
